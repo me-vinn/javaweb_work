@@ -20,26 +20,31 @@ import lombok.NoArgsConstructor;
 @Entity
 @Table(name = "t_menu")
 @Data
-@NoArgsConstructor      // JPA 要求：反射创建对象时需要无参构造
+@NoArgsConstructor // JPA 要求：反射创建对象时需要无参构造
 public class Menu {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)   // 主键自增
+    @GeneratedValue(strategy = GenerationType.IDENTITY) // 主键自增
     private Long id;
 
     @Column(nullable = false)
     private String dishName;
 
     @Column(nullable = false)
-    private BigDecimal price;   // 钱一律 BigDecimal——第2课用 Integer 是教学起点的妥协，本次一并整改
+    private BigDecimal price; // 钱一律 BigDecimal——第2课用 Integer 是教学起点的妥协，本次一并整改
+
+    /** 辣度：0 不辣、1 微辣、2 中辣、3 特辣。第20课新增——ddl-auto 启动自动加列 */
+    @Column(nullable = false)
+    private Integer spicyLevel = 0;
 
     /** 菜品照片访问路径（如 /files/xxx.png）。第13课新增——ddl-auto:update 启动自动加列 */
     private String imageUrl;
 
     // 不用 @AllArgsConstructor：它会把 id 也算进去生成三参构造器，初始化用不上；
-    // 手写两参构造器，id 留给数据库自增
-    public Menu(String dishName, BigDecimal price) {
+    // 手写构造器，id 留给数据库自增
+    public Menu(String dishName, BigDecimal price, Integer spicyLevel) {
         this.dishName = dishName;
         this.price = price;
+        this.spicyLevel = spicyLevel;
     }
 }

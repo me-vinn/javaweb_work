@@ -17,6 +17,8 @@ public class MenuVO {
     private Long id;
     private String dishName;
     private BigDecimal price;
+    /** 辣度：0 不辣、1 微辣、2 中辣、3 特辣 */
+    private Integer spicyLevel;
     private String imageUrl;
 
     public static MenuVO from(Menu menu) {
@@ -24,6 +26,7 @@ public class MenuVO {
         vo.setId(menu.getId());
         vo.setDishName(menu.getDishName());
         vo.setPrice(menu.getPrice());
+        vo.setSpicyLevel(menu.getSpicyLevel());
         vo.setImageUrl(menu.getImageUrl());
         return vo;
     }

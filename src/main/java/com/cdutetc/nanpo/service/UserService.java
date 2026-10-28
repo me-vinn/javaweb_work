@@ -40,6 +40,11 @@ public class UserService {
 
     /** 办卡：用户名查重 + 密码加密入库 */
     public void register(RegisterRequest req) {
+        // 空值校验：前端可能绕过，后端必须兜底（密码空白视同空密码）
+        if (req.getUsername() == null || req.getUsername().isBlank()
+                || req.getPassword() == null || req.getPassword().isBlank()) {
+            throw new BusinessException(ErrorCodeEnum.PARAM_INVALID);
+        }
         if (userRepository.findByUsername(req.getUsername()).isPresent()) {
             throw new BusinessException(ErrorCodeEnum.USERNAME_TAKEN);
         }

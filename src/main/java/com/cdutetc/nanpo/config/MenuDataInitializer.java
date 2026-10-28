@@ -28,11 +28,11 @@ public class MenuDataInitializer implements CommandLineRunner {
         if (menuRepository.count() > 0) {
             return;
         }
-        menuRepository.save(new Menu("回锅肉", new BigDecimal("18")));
-        menuRepository.save(new Menu("鱼香肉丝", new BigDecimal("16")));
-        menuRepository.save(new Menu("麻婆豆腐", new BigDecimal("12")));
-        menuRepository.save(new Menu("番茄炒蛋", new BigDecimal("10")));
-        menuRepository.save(new Menu("蛋炒饭", new BigDecimal("8")));
-        menuRepository.save(new Menu("米饭", new BigDecimal("1")));
+        menuRepository.save(new Menu("回锅肉", new BigDecimal("18"), 1));
+        menuRepository.save(new Menu("鱼香肉丝", new BigDecimal("16"), 1));
+        menuRepository.save(new Menu("麻婆豆腐", new BigDecimal("12"), 2));
+        menuRepository.save(new Menu("番茄炒蛋", new BigDecimal("10"), 0));
+        menuRepository.save(new Menu("蛋炒饭", new BigDecimal("8"), 0));
+        menuRepository.save(new Menu("米饭", new BigDecimal("1"), 0));
     }
 }

@@ -10,6 +10,12 @@
         .dish img { width: 48px; height: 48px; object-fit: cover; border-radius: 6px; vertical-align: middle; margin-right: 6px; }
         .placeholder { display: inline-block; width: 48px; height: 48px; line-height: 48px; text-align: center; background: #eee; border-radius: 6px; margin-right: 6px; }
         .price { color: #c0392b; font-weight: bold; }
+        /* 辣度标签：按等级用不同底色，0 不辣 / 1 微辣 / 2 中辣 / 3 特辣 */
+        .spicy { display: inline-block; margin-left: 6px; padding: 1px 6px; border-radius: 10px; font-size: 12px; vertical-align: middle; }
+        .spicy.lv0 { background: #eef3ee; color: #5b8a5b; }
+        .spicy.lv1 { background: #fff2e0; color: #c07800; }
+        .spicy.lv2 { background: #ffe6dc; color: #d35400; }
+        .spicy.lv3 { background: #fde2e1; color: #c0392b; }
         button { width: 100%; padding: 12px; margin-top: 16px; font-size: 16px; background: #c0392b; color: #fff; border: none; border-radius: 6px; cursor: pointer; }
         input[type=number] { width: 56px; }
         .auth { display: flex; gap: 6px; align-items: center; margin-bottom: 12px; flex-wrap: wrap; }
@@ -34,6 +40,7 @@
     <button class="auth-btn" onclick="register()">办卡</button>
     <button class="auth-btn" onclick="login()">登录</button>
     <span id="who" style="color:#27ae60"></span>
+    <span id="authMsg"></span>
 </div>
 
 <!-- 菜单区：页面打开后由 fetch(/menu) 填充 -->
@@ -62,6 +69,13 @@
 <script>
     // ===== 会员（第16课）：令牌管理与登录 =====
     // 所有需要亮卡的请求都带上 Authorization: Bearer <accessToken>
+    // 页面内提示：不用 alert()——Trae 内置浏览器里阻塞式弹窗会触发其自身 React 渲染异常
+    function setAuthMsg(text, ok) {
+        const el = document.getElementById('authMsg');
+        el.textContent = text || '';
+        el.style.color = ok ? '#27ae60' : '#c0392b';
+    }
+
     function authHeaders() {
         const headers = { 'Content-Type': 'application/json' };
         const token = localStorage.getItem('accessToken');
@@ -76,7 +90,8 @@
             body: JSON.stringify({ username: username.value, password: password.value })
         })
         .then(r => r.json())
-        .then(result => alert(result.code === 200 ? '办卡成功，请登录' : result.msg));
+        .then(result => setAuthMsg(result.code === 200 ? '办卡成功，请登录' : result.msg, result.code === 200))
+        .catch(() => setAuthMsg('网络异常，请稍后再试', false));
     }
 
     function login() {
@@ -92,15 +107,25 @@
                 localStorage.setItem('accessToken', result.data.accessToken);
                 localStorage.setItem('refreshToken', result.data.refreshToken);
                 who.textContent = '会员：' + result.data.nickname;
+                setAuthMsg('', true);
             } else {
-                alert(result.msg);
+                setAuthMsg(result.msg, false);
             }
-        });
+        })
+        .catch(() => setAuthMsg('网络异常，请稍后再试', false));
     }
 
     // ===== 菜单 =====
     // 第14课适配（第四次前后端联动）：/menu 从 Map{菜名:价格} 升级为 List<MenuVO>
     // ——加了 imageUrl 后 Map 装不下了；有照片显示照片，没照片显示占位图标
+    // 辣度标签：后端 spicyLevel（0 不辣 / 1 微辣 / 2 中辣 / 3 特辣）转成彩色小标签
+    const SPICY_LABELS = { 0: '不辣', 1: '微辣', 2: '中辣', 3: '特辣' };
+    function spicyTag(level) {
+        const lv = (level === null || level === undefined) ? 0 : level;
+        const label = SPICY_LABELS[lv] || '不辣';
+        const chili = lv > 0 ? '🌶️ ' : '';
+        return `<span class="spicy lv${lv}">${chili}${label}</span>`;
+    }
     fetch('/menu')
         .then(resp => resp.json())
         .then(result => {
@@ -111,7 +136,7 @@
                     : `<span class="placeholder">🍽️</span>`;
                 html += `
                 <div class="dish">
-                    <span>${img} ${dish.dishName} <span class="price">￥${dish.price}</span></span>
+                    <span>${img} ${dish.dishName} <span class="price">￥${dish.price}</span>${spicyTag(dish.spicyLevel)}</span>
                     <span>数量 <input type="number" min="0" value="0" data-dish="${dish.dishName}"></span>
                 </div>`;
             });
@@ -127,7 +152,7 @@
             }
         });
         if (dishList.length === 0) {
-            alert('还没点菜呢');
+            document.getElementById('result').innerText = '还没点菜呢';
             return;
         }
         // 第16课：下单要亮卡——带 Authorization 头；未登录时后端回 40101
@@ -165,7 +190,7 @@
     // ===== AI 服务员（第17课）：和小智聊天 =====
     function askAi() {
         const msg = aiInput.value.trim();
-        if (!msg) { alert('想问点什么？'); return; }
+        if (!msg) { aiReply.textContent = '想问点什么？'; return; }
         aiReply.textContent = '小智思考中…';
         fetch('/ai/chat', {
             method: 'POST',
@@ -181,7 +206,7 @@
     // 第18课：让小智帮你下单——说句话即可（要已登录：AI 下单也要亮卡）
     function orderAi() {
         const msg = aiInput.value.trim();
-        if (!msg) { alert('告诉小智你想吃什么'); return; }
+        if (!msg) { aiReply.textContent = '告诉小智你想吃什么'; return; }
         aiReply.textContent = '小智下单中…';
         fetch('/order/ai', {
             method: 'POST',

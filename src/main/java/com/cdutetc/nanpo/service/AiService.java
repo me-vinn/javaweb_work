@@ -1,10 +1,13 @@
 package com.cdutetc.nanpo.service;
 
+import java.util.stream.Collectors;
+
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.stereotype.Service;
 
 import com.cdutetc.nanpo.common.BusinessException;
 import com.cdutetc.nanpo.common.ErrorCodeEnum;
+import com.cdutetc.nanpo.dao.MenuRepository;
 import com.cdutetc.nanpo.dto.OrderRequest;
 import com.cdutetc.nanpo.vo.OrderVO;
 
@@ -12,9 +15,9 @@ import com.cdutetc.nanpo.vo.OrderVO;
  * AI 服务员"小智"。
  * 第17课：基于 Spring AI 的聊天（ChatClient + 人设提示词）。
  * 第18课两项新能力：
- *   ① 工具调用——chatClient 挂上 MenuTool，小智能查"真菜单"回答问题；
- *   ② 结构化输出——orderParser 把"来份不辣的下饭菜"直接解析成 OrderRequest 对象，
- *      随即调用第9课的 OrderService.createOrder()：AI 下单复用全部旧业务，一行不改。
+ * ① 工具调用——chatClient 挂上 MenuTool，小智能查"真菜单"回答问题；
+ * ② 结构化输出——orderParser 把"来份不辣的下饭菜"直接解析成 OrderRequest 对象，
+ * 随即调用第9课的 OrderService.createOrder()：AI 下单复用全部旧业务，一行不改。
  */
 @Service
 public class AiService {
@@ -27,30 +30,42 @@ public class AiService {
 
     private final OrderService orderService;
 
-    public AiService(ChatClient.Builder chatClientBuilder, MenuTool menuTool, OrderService orderService) {
+    /** 读真实菜单：点单解析时把菜名列表交给模型，避免它凭空编造菜品 */
+    private final MenuRepository menuRepository;
+
+    /** 小智人设（每次调用时再拼上当前菜单） */
+    private static final String CHAT_SYSTEM = "你是成都理工大学工程技术学院南坡小炒饭馆的AI服务员，名叫小智。" +
+            "你熟悉川菜家常菜，回答热情简短（两三句话），最后可以自然地引导顾客点单。" +
+            "顾客问菜单相关问题时，先调用工具查真实菜单再回答，不要凭空编造菜品和价格。" +
+            "如果顾客的问题与饭馆无关，礼貌地把话题拉回点餐。";
+
+    /** 点单解析器人设（每次调用时再拼上当前菜单） */
+    private static final String ORDER_PARSER_SYSTEM = "你是南坡小炒的点单解析器，只输出 JSON，不输出任何多余文字。" +
+            "把顾客的话解析成点单结构：dishList 里每项是 {\"dishName\":菜名字符串, \"count\":正整数份数}。" +
+            "菜名必须使用菜单上的原样名称；顾客没说份数默认 1 份；" +
+            "实在识别不出任何菜品时输出空 dishList。";
+
+    public AiService(ChatClient.Builder chatClientBuilder, MenuTool menuTool,
+            OrderService orderService, MenuRepository menuRepository) {
         this.orderService = orderService;
+        this.menuRepository = menuRepository;
 
         // Builder 是可复用的：clone() 出独立副本，各自设置人设，互不串台
         this.chatClient = chatClientBuilder.clone()
-                .defaultSystem("你是成都理工大学工程技术学院南坡小炒饭馆的AI服务员，名叫小智。" +
-                        "你熟悉川菜家常菜，回答热情简短（两三句话），最后可以自然地引导顾客点单。" +
-                        "顾客问菜单相关问题时，先调用工具查真实菜单再回答，不要凭空编造菜品和价格。" +
-                        "如果顾客的问题与饭馆无关，礼貌地把话题拉回点餐。")
+                .defaultSystem(CHAT_SYSTEM)
                 .defaultTools(menuTool)
                 .build();
 
         this.orderParser = chatClientBuilder.clone()
-                .defaultSystem("你是南坡小炒的点单解析器，只输出 JSON，不输出任何多余文字。" +
-                        "把顾客的话解析成点单结构：dishList 里每项是 {\"dishName\":菜名字符串, \"count\":正整数份数}。" +
-                        "菜名必须使用菜单上的原样名称（如：回锅肉、米饭）；顾客没说份数默认 1 份；" +
-                        "实在识别不出任何菜品时输出空 dishList。")
+                .defaultSystem(ORDER_PARSER_SYSTEM)
                 .build();
     }
 
-    /** 聊天：一问一答；问菜单会自动触发 MenuTool 工具调用 */
+    /** 聊天：一问一答；问菜单时既可用 MenuTool，也会带上当前真实菜单，绝不编造 */
     public String chat(String message) {
         try {
             return chatClient.prompt()
+                    .system(CHAT_SYSTEM + "\n当前菜单（回答菜品与价格只能依据这份菜单）：" + currentMenu())
                     .user(message)
                     .call()
                     .content();
@@ -69,6 +84,8 @@ public class AiService {
         OrderRequest request;
         try {
             request = orderParser.prompt()
+                    // 把真实菜单拼进本次系统提示：模糊说法（如"不辣的下饭菜"）也能落到真菜名
+                    .system(ORDER_PARSER_SYSTEM + "\n当前菜单（dishName 只能从以下菜名中原样选取）：" + currentMenu())
                     .user(message)
                     .call()
                     .entity(OrderRequest.class);
@@ -82,5 +99,25 @@ public class AiService {
         // 关键一行：AI 只是新的"入口"，下单仍是老收银台——
         // 事务、价格快照、订单记名（第9/11/16课）全部原样生效
         return orderService.createOrder(request);
+    }
+
+    /** 当前在售菜单，格式：回锅肉(18元/微辣)、米饭(1元/不辣)…——每次点单实时读取，改价/上下架立即生效 */
+    private String currentMenu() {
+        return menuRepository.findAll().stream()
+                .map(m -> m.getDishName() + "(" + m.getPrice() + "元/" + spicyLabel(m.getSpicyLevel()) + ")")
+                .collect(Collectors.joining("、"));
+    }
+
+    /** 辣度编码转文字，供提示词使用：0 不辣、1 微辣、2 中辣、3 特辣 */
+    private String spicyLabel(Integer level) {
+        if (level == null) {
+            return "不辣";
+        }
+        return switch (level) {
+            case 1 -> "微辣";
+            case 2 -> "中辣";
+            case 3 -> "特辣";
+            default -> "不辣";
+        };
     }
 }
