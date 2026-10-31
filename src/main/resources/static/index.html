@@ -83,6 +83,26 @@
         return headers;
     }
 
+    // 第16课续卡：短卡过期时用长卡换新短卡；长卡也失效（如服务重启后用户已不在库）则返回 false
+    function refreshAccessToken() {
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (!refreshToken) return Promise.resolve(false);
+        return fetch('/refresh', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ refreshToken: refreshToken })
+        })
+        .then(r => r.json())
+        .then(result => {
+            if (result.code !== 200) return false;
+            localStorage.setItem('accessToken', result.data.accessToken);
+            localStorage.setItem('refreshToken', result.data.refreshToken);
+            who.textContent = '会员：' + result.data.nickname;
+            return true;
+        })
+        .catch(() => false);
+    }
+
     function register() {
         fetch('/register', {
             method: 'POST',
@@ -215,6 +235,26 @@
         })
         .then(r => r.json())
         .then(result => {
+            // 短卡过期：先用长卡续期，再重试一次；长卡也失效才要求重新登录
+            if (result.code === 40101 || result.code === 40102) {
+                return refreshAccessToken().then(ok => {
+                    if (!ok) return result;
+                    return fetch('/order/ai', {
+                        method: 'POST',
+                        headers: authHeaders(),
+                        body: JSON.stringify({ message: msg })
+                    }).then(r2 => r2.json());
+                });
+            }
+            return result;
+        })
+        .then(result => {
+            if (result.code === 40101 || result.code === 40102) {
+                localStorage.removeItem('accessToken');
+                localStorage.removeItem('refreshToken');
+                aiReply.textContent = '❌ 请先在会员区办卡并登录后再下单（服务重启后需重新办卡登录）';
+                return;
+            }
             aiReply.textContent = result.code === 200
                 ? '✅ ' + result.data.msg + '\n' + JSON.stringify(result.data, null, 2)
                 : '❌ ' + result.msg + '（code=' + result.code + '）';

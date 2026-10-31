@@ -18,7 +18,7 @@ import io.jsonwebtoken.security.Keys;
  * JWT 工具。
  * 第15课：单张卡（120 分钟）。
  * 第16课升级为长短两张卡：
- *   accessToken（15分钟，天天用）+ refreshToken（7天，只用来续卡）——
+ *   accessToken（15分钟，天天用）+ refreshToken（30天，只用来续卡）——
  *   短卡丢了损失小，长卡尽量少出门，被偷的风险就小；
  *   两张卡靠 Payload 里的 type 声明区分，各卡各用、不能混用。
  */
@@ -34,7 +34,7 @@ public class JwtUtil {
     @Value("${nanpo.jwt.access-ttl-minutes:15}")
     private long accessTtlMinutes;
 
-    @Value("${nanpo.jwt.refresh-ttl-days:7}")
+    @Value("${nanpo.jwt.refresh-ttl-days:30}")
     private long refreshTtlDays;
 
     private SecretKey key() {

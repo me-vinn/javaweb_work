@@ -21,7 +21,7 @@ import io.jsonwebtoken.JwtException;
 /**
  * 会员服务：办卡（注册）、验证身份（登录）、续卡（refresh）。
  * 第15课：单张 120 分钟卡。
- * 第16课：长短双卡——登录同时发 access(15分钟)+refresh(7天)，
+ * 第16课：长短双卡——登录同时发 access(15分钟)+refresh(30天)，
  * 短卡过期用长卡续，避免用户天天重新输密码。
  */
 @Service
